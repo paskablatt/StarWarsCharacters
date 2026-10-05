@@ -19,14 +19,16 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.starwarscharacters.R
+import com.example.starwarscharacters.presentation.CharactersUiState
 import com.example.starwarscharacters.presentation.CharacterDetailsScreen
 import com.example.starwarscharacters.presentation.CharactersListScreen
 import com.example.starwarscharacters.presentation.CharactersViewModel
 import com.example.starwarscharacters.presentation.PlaceholderScreen
+import com.example.starwarscharacters.presentation.films.FilmsScreen
 
 private const val CHARACTERS_TAB = "characters_tab"
 private const val HOME_TAB = "home_tab"
-private const val VIDEO_TAB = "video_tab"
+private const val FILMS_TAB = "films_tab"
 private const val GALAXY_TAB = "galaxy_tab"
 
 @Composable
@@ -95,9 +97,9 @@ fun AppNavigation() {
 
 
                 NavigationBarItem(
-                    selected = currentRoute == VIDEO_TAB,
+                    selected = currentRoute == FILMS_TAB,
                     onClick = {
-                        rootNavController.navigate(VIDEO_TAB) {
+                        rootNavController.navigate(FILMS_TAB) {
                             popUpTo(rootNavController.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -110,11 +112,11 @@ fun AppNavigation() {
                             painter = painterResource(
                                 id = R.drawable.ic_video
                             ),
-                            contentDescription = "Видео"
+                            contentDescription = "Фильмы"
                         )
                     },
                     label = {
-                        Text("Видео")
+                        Text("Фильмы")
                     },
                     colors = starWarsNavigationColors()
                 )
@@ -164,11 +166,8 @@ fun AppNavigation() {
                 )
             }
 
-            composable(VIDEO_TAB) {
-                PlaceholderScreen(
-                    title = "Видео",
-                    description = "Короткие видео и GIF появятся позже"
-                )
+            composable(FILMS_TAB) {
+                FilmsScreen()
             }
 
             composable(GALAXY_TAB) {
@@ -202,28 +201,40 @@ private fun CharactersNavigation(
         startDestination = "characters_list"
     ) {
 
-        composable("characters_list") {
+        composable(route = "characters_list") {
             CharactersListScreen(
                 viewModel = viewModel,
                 onCharacterClick = { character ->
 
-                    val index = viewModel.characters.indexOf(character)
+                    val characters =
+                        (viewModel.uiState as? CharactersUiState.Success)
+                            ?.characters
+                            .orEmpty()
 
-                    navController.navigate(
-                        "character_details/$index"
-                    )
+                    val index = characters.indexOf(character)
+
+                    if (index >= 0) {
+                        navController.navigate(
+                            route = "character_details/$index"
+                        )
+                    }
                 }
             )
         }
 
-        composable("character_details/{index}") { backStackEntry ->
+        composable(route = "character_details/{index}") { backStackEntry ->
 
             val index = backStackEntry.arguments
                 ?.getString("index")
                 ?.toIntOrNull()
 
+            val characters =
+                (viewModel.uiState as? CharactersUiState.Success)
+                    ?.characters
+                    .orEmpty()
+
             val character = index?.let {
-                viewModel.characters.getOrNull(it)
+                characters.getOrNull(it)
             }
 
             if (character != null) {
