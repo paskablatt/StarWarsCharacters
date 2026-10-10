@@ -3,6 +3,7 @@ package com.example.starwarscharacters.data.repository
 import com.example.starwarscharacters.data.mapper.toDomainOrNull
 import com.example.starwarscharacters.data.remote.api.SwapiApi
 import com.example.starwarscharacters.domain.StarWarsCharacter
+import com.example.starwarscharacters.domain.repository.CharactersPage
 import com.example.starwarscharacters.domain.repository.CharactersRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -14,28 +15,40 @@ class CharactersRepositoryImpl(
     private val api: SwapiApi
 ) : CharactersRepository {
 
+    // Старый способ загрузки.
+    // Временно сохраняем для совместимости с ViewModel.
     override suspend fun getCharacters(): List<StarWarsCharacter> =
         withContext(Dispatchers.IO) {
 
             coroutineScope {
-
-                // Наши персонажи находятся в основном
-                // на этих страницах SWAPI
                 val pages = listOf(1, 2, 3, 4, 5, 6)
 
                 pages.map { page ->
                     async {
-                        api.getCharacters(page)
+                        getCharactersPage(page).characters
                     }
                 }
                     .awaitAll()
-                    .flatMap { response ->
-                        response.results
-                    }
-                    .mapNotNull { characterDto ->
-                        characterDto.toDomainOrNull()
-                    }
+                    .flatten()
             }
+        }
+
+    // Новый способ: загрузка одной страницы.
+    override suspend fun getCharactersPage(
+        page: Int
+    ): CharactersPage =
+        withContext(Dispatchers.IO) {
+
+            val response = api.getCharacters(page)
+
+            val characters = response.results.mapNotNull { dto ->
+                dto.toDomainOrNull()
+            }
+
+            CharactersPage(
+                characters = characters,
+                hasNextPage = response.next != null
+            )
         }
 
     override suspend fun searchCharacters(
@@ -45,8 +58,8 @@ class CharactersRepositoryImpl(
 
             api.searchCharacters(query)
                 .results
-                .mapNotNull { characterDto ->
-                    characterDto.toDomainOrNull()
+                .mapNotNull { dto ->
+                    dto.toDomainOrNull()
                 }
         }
 
