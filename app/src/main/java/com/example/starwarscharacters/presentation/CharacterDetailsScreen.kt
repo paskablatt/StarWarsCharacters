@@ -18,6 +18,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.starwarscharacters.R
 import com.example.starwarscharacters.domain.StarWarsCharacter
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.starwarscharacters.di.AppContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,7 +30,17 @@ fun CharacterDetailsScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val favoritesViewModel: CharacterFavoritesViewModel = viewModel(
+        key = "character_favorite_${character.name}",
+        factory = CharacterFavoritesViewModel.factory(
+            repository = AppContainer.favoritesRepository,
+            character = character
+        )
+    )
 
+    val isFavorite by favoritesViewModel.isFavorite.collectAsState()
+    val isSaving by favoritesViewModel.isSaving.collectAsState()
+    val favoriteError by favoritesViewModel.error.collectAsState()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -145,6 +159,28 @@ fun CharacterDetailsScreen(
                 contentScale = ContentScale.Crop
             )
 
+            Button(
+                onClick = favoritesViewModel::toggleFavorite,
+                enabled = isFavorite != null && !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = when {
+                        isSaving -> "Сохранение…"
+                        isFavorite == null -> "Загрузка избранного…"
+                        isFavorite == true -> "★ Удалить из избранного"
+                        else -> "☆ В избранное"
+                    }
+                )
+            }
+
+            favoriteError?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             // Оружие показываем только при наличии данных
 
             val weaponImageRes = character.weaponImageRes

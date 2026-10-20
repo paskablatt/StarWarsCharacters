@@ -4,197 +4,371 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.starwarscharacters.di.AppContainer
+import com.example.starwarscharacters.domain.CharacterFilters
+import com.example.starwarscharacters.domain.FilmFilterOption
+import com.example.starwarscharacters.domain.HeightFilter
 import com.example.starwarscharacters.domain.StarWarsCharacter
+import com.example.starwarscharacters.domain.repository.SearchSettingsRepository
+import com.example.starwarscharacters.domain.usecase.GetCharactersPageUseCase
+import com.example.starwarscharacters.domain.usecase.GetFilmFilterOptionsUseCase
+import com.example.starwarscharacters.domain.usecase.GetFilteredCharactersUseCase
+import com.example.starwarscharacters.presentation.settings.FilterBadgeCache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class CharactersViewModel : ViewModel() {
+class CharactersViewModel(
+    private val getCharactersPage: GetCharactersPageUseCase,
+    private val getFilteredCharacters: GetFilteredCharactersUseCase,
+    private val getFilmOptions: GetFilmFilterOptionsUseCase,
+    private val settingsRepository: SearchSettingsRepository,
+    private val badgeCache: FilterBadgeCache
+) : ViewModel() {
 
     var uiState by mutableStateOf<CharactersUiState>(
         CharactersUiState.Loading
     )
         private set
 
-    var searchQuery by mutableStateOf("")
+    var appliedFilters by mutableStateOf(CharacterFilters())
         private set
 
-    var isLoadingMore by mutableStateOf(false)
+    var draftFilters by mutableStateOf(CharacterFilters())
         private set
 
-    var canLoadMore by mutableStateOf(false)
+    var settingsLoaded by mutableStateOf(false)
         private set
 
-    var loadMoreError by mutableStateOf(false)
+    var isSavingSettings by mutableStateOf(false)
         private set
 
-    private var currentPage = 0
+    var settingsError by mutableStateOf<String?>(null)
+        private set
 
-    private var allCharacters: List<StarWarsCharacter> = emptyList()
+    val showFilterBadge = badgeCache.showBadge
 
-    private var showingSearchResults = false
+    var filmOptions by mutableStateOf<List<FilmFilterOption>>(
+        emptyList()
+    )
+        private set
 
+    var isLoadingFilms by mutableStateOf(false)
+        private set
+
+    var filmsError by mutableStateOf<String?>(null)
+        private set
+
+    var currentPage by mutableStateOf(1)
+        private set
+
+    var hasNextPage by mutableStateOf(false)
+        private set
+
+    // Известно для результатов фильтрации.
+    var totalFilteredPages by mutableStateOf<Int?>(null)
+        private set
+
+    var filteredCount by mutableStateOf<Int?>(null)
+        private set
+
+    private var filmsLoaded = false
+    private var requestedPage = 1
+    private var requestVersion = 0
+
+    private var settingsRequest: Job? = null
     private var mainRequest: Job? = null
-    private var nextPageRequest: Job? = null
+
+    // Результаты фильтрации храним в памяти.
+    // Переключение их страниц не требует новых запросов.
+    private var filteredResults: List<StarWarsCharacter>? = null
 
     init {
-        loadCharacters()
+        restoreSettings()
     }
 
-    // Загрузка первой страницы
-    fun loadCharacters() {
-        mainRequest?.cancel()
-        nextPageRequest?.cancel()
-
-        showingSearchResults = false
-        currentPage = 0
-        canLoadMore = false
-        isLoadingMore = false
-        loadMoreError = false
-
+    private fun restoreSettings() {
+        settingsRequest?.cancel()
         uiState = CharactersUiState.Loading
 
-        mainRequest = viewModelScope.launch {
+        settingsRequest = viewModelScope.launch {
             try {
-                val page =
-                    AppContainer.getCharactersPageUseCase(1)
+                val savedFilters = settingsRepository.filters.first()
 
-                currentPage = 1
-                canLoadMore = page.hasNextPage
-                allCharacters = page.characters
+                appliedFilters = savedFilters
+                draftFilters = savedFilters
+                badgeCache.update(savedFilters)
+                settingsLoaded = true
 
-                uiState = CharactersUiState.Success(
-                    characters = allCharacters
-                )
-
-            } catch (exception: CancellationException) {
-                throw exception
-
-            } catch (exception: Exception) {
-                exception.printStackTrace()
-
+                reloadCharacters()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 uiState = CharactersUiState.Error(
-                    message = "Не удалось загрузить персонажей. Проверьте подключение к интернету."
+                    message = "Не удалось прочитать настройки. " +
+                            "Нажмите «Повторить»."
                 )
             }
         }
     }
 
-    // Загрузка следующей страницы
-    fun loadMoreCharacters() {
+    fun beginEditingSettings() {
+        draftFilters = appliedFilters
+        settingsError = null
+
+        if (!filmsLoaded) {
+            loadFilmOptions()
+        }
+    }
+
+    fun loadFilmOptions() {
+        if (isLoadingFilms) return
+
+        isLoadingFilms = true
+        filmsError = null
+
+        viewModelScope.launch {
+            try {
+                filmOptions = getFilmOptions()
+                filmsLoaded = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                filmsError =
+                    "Не удалось загрузить фильмы. Проверьте интернет."
+            } finally {
+                isLoadingFilms = false
+            }
+        }
+    }
+
+    fun onDraftSearchQueryChange(query: String) {
+        if (isSavingSettings) return
+
+        draftFilters = draftFilters.copy(query = query)
+        settingsError = null
+    }
+
+    fun onDraftFilmChange(episodeId: Int?) {
+        if (isSavingSettings) return
+
+        draftFilters = draftFilters.copy(episodeId = episodeId)
+        settingsError = null
+    }
+
+    fun onDraftHeightChange(heightFilter: HeightFilter) {
+        if (isSavingSettings) return
+
+        draftFilters = draftFilters.copy(
+            heightFilter = heightFilter
+        )
+        settingsError = null
+    }
+
+    fun resetDraftSettings() {
+        if (isSavingSettings) return
+
+        draftFilters = CharacterFilters()
+        settingsError = null
+    }
+
+    fun saveSettings(onSaved: () -> Unit) {
+        if (!settingsLoaded || isSavingSettings) return
+
+        val filters = draftFilters.copy(
+            query = draftFilters.query.trim()
+        )
+
+        isSavingSettings = true
+        settingsError = null
+
+        viewModelScope.launch {
+            try {
+                settingsRepository.saveFilters(filters)
+
+                appliedFilters = filters
+                draftFilters = filters
+                badgeCache.update(filters)
+
+                reloadCharacters()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                settingsError =
+                    "Не удалось сохранить настройки. Попробуйте ещё раз."
+                return@launch
+            } finally {
+                isSavingSettings = false
+            }
+
+            onSaved()
+        }
+    }
+
+    private fun reloadCharacters() {
+        filteredResults = null
+        filteredCount = null
+        totalFilteredPages = null
+        currentPage = 1
+        hasNextPage = false
+
+        loadPage(1)
+    }
+
+    private fun loadPage(pageNumber: Int) {
+        requestVersion++
+        val version = requestVersion
+        val filters = appliedFilters
+
+        mainRequest?.cancel()
+        requestedPage = pageNumber
+
+        if (filters.isActive) {
+            val cachedResults = filteredResults
+
+            if (cachedResults != null) {
+                showFilteredPage(cachedResults, pageNumber)
+                return
+            }
+        }
+
+        uiState = CharactersUiState.Loading
+
+        mainRequest = viewModelScope.launch {
+            try {
+                if (filters.isActive) {
+                    val result = getFilteredCharacters(filters)
+                    ensureActive()
+
+                    if (version != requestVersion) return@launch
+
+                    filteredResults = result
+                    showFilteredPage(result, pageNumber)
+                } else {
+                    val page = getCharactersPage(pageNumber)
+                    ensureActive()
+
+                    if (version != requestVersion) return@launch
+
+                    currentPage = pageNumber
+                    hasNextPage = page.hasNextPage
+                    filteredCount = null
+                    totalFilteredPages = null
+
+                    uiState = CharactersUiState.Success(
+                        characters = page.characters
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (version == requestVersion) {
+                    uiState = CharactersUiState.Error(
+                        message = "Не удалось загрузить персонажей. " +
+                                "Проверьте подключение к интернету."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun showFilteredPage(
+        result: List<StarWarsCharacter>,
+        pageNumber: Int
+    ) {
+        val pages = maxOf(
+            1,
+            (result.size + PAGE_SIZE - 1) / PAGE_SIZE
+        )
+
+        val page = pageNumber.coerceIn(1, pages)
+        val start = (page - 1) * PAGE_SIZE
+
+        currentPage = page
+        requestedPage = page
+        totalFilteredPages = pages
+        filteredCount = result.size
+        hasNextPage = page < pages
+
+        uiState = CharactersUiState.Success(
+            characters = result.drop(start).take(PAGE_SIZE)
+        )
+    }
+
+    fun nextPage() {
         if (
-            showingSearchResults ||
-            isLoadingMore ||
-            !canLoadMore ||
-            uiState !is CharactersUiState.Success
+            uiState !is CharactersUiState.Success ||
+            !hasNextPage
         ) {
             return
         }
 
-        isLoadingMore = true
-        loadMoreError = false
-
-        val nextPage = currentPage + 1
-
-        nextPageRequest = viewModelScope.launch {
-            try {
-                val page =
-                    AppContainer.getCharactersPageUseCase(nextPage)
-
-                allCharacters = allCharacters + page.characters
-
-                currentPage = nextPage
-                canLoadMore = page.hasNextPage
-
-                uiState = CharactersUiState.Success(
-                    characters = allCharacters
-                )
-
-            } catch (exception: CancellationException) {
-                throw exception
-
-            } catch (exception: Exception) {
-                exception.printStackTrace()
-                loadMoreError = true
-
-            } finally {
-                isLoadingMore = false
-            }
-        }
+        loadPage(currentPage + 1)
     }
 
-    // Изменение текста поиска
-    fun onSearchQueryChange(query: String) {
-        searchQuery = query
-    }
-
-    // Поиск персонажей через SWAPI
-    fun searchCharacters() {
-        if (searchQuery.isBlank()) {
-            clearSearch()
+    fun previousPage() {
+        if (
+            uiState !is CharactersUiState.Success ||
+            currentPage <= 1
+        ) {
             return
         }
 
-        mainRequest?.cancel()
-        nextPageRequest?.cancel()
+        loadPage(currentPage - 1)
+    }
 
-        showingSearchResults = true
-        isLoadingMore = false
-        loadMoreError = false
+    fun firstPage() {
+        if (
+            uiState !is CharactersUiState.Success ||
+            currentPage <= 1
+        ) {
+            return
+        }
 
-        uiState = CharactersUiState.Loading
+        loadPage(1)
+    }
 
-        mainRequest = viewModelScope.launch {
-            try {
-                val characters =
-                    AppContainer.searchCharactersUseCase(
-                        searchQuery.trim()
+    fun retry() {
+        if (settingsLoaded) {
+            loadPage(requestedPage)
+        } else {
+            restoreSettings()
+        }
+    }
+
+    companion object {
+        private const val PAGE_SIZE = 10
+
+        fun factory(
+            getCharactersPage: GetCharactersPageUseCase,
+            getFilteredCharacters: GetFilteredCharactersUseCase,
+            getFilmOptions: GetFilmFilterOptionsUseCase,
+            settingsRepository: SearchSettingsRepository,
+            badgeCache: FilterBadgeCache
+        ): ViewModelProvider.Factory {
+            return object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>
+                ): T {
+                    require(
+                        modelClass.isAssignableFrom(
+                            CharactersViewModel::class.java
+                        )
                     )
 
-                uiState = CharactersUiState.Success(
-                    characters = characters
-                )
-
-            } catch (exception: CancellationException) {
-                throw exception
-
-            } catch (exception: Exception) {
-                exception.printStackTrace()
-
-                uiState = CharactersUiState.Error(
-                    message = "Не удалось выполнить поиск. Проверьте подключение к интернету."
-                )
+                    return CharactersViewModel(
+                        getCharactersPage = getCharactersPage,
+                        getFilteredCharacters = getFilteredCharacters,
+                        getFilmOptions = getFilmOptions,
+                        settingsRepository = settingsRepository,
+                        badgeCache = badgeCache
+                    ) as T
+                }
             }
-        }
-    }
-
-    // Очистка поиска
-    fun clearSearch() {
-        mainRequest?.cancel()
-        nextPageRequest?.cancel()
-
-        searchQuery = ""
-        showingSearchResults = false
-        isLoadingMore = false
-        loadMoreError = false
-
-        if (allCharacters.isNotEmpty()) {
-            uiState = CharactersUiState.Success(
-                characters = allCharacters
-            )
-        } else {
-            loadCharacters()
-        }
-    }
-
-    // Повторная попытка
-    fun retry() {
-        if (showingSearchResults && searchQuery.isNotBlank()) {
-            searchCharacters()
-        } else {
-            loadCharacters()
         }
     }
 }
