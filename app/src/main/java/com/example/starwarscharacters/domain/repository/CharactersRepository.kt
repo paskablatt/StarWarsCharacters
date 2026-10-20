@@ -1,5 +1,7 @@
 package com.example.starwarscharacters.domain.repository
 
+import com.example.starwarscharacters.domain.CharacterFilters
+import com.example.starwarscharacters.domain.FilmFilterOption
 import com.example.starwarscharacters.domain.StarWarsCharacter
 
 data class CharactersPage(
@@ -22,4 +24,10 @@ interface CharactersRepository {
     suspend fun getCharacter(
         id: Int
     ): StarWarsCharacter?
+
+    suspend fun getFilmFilterOptions(): List<FilmFilterOption>
+
+    suspend fun getFilteredCharacters(
+        filters: CharacterFilters
+    ): List<StarWarsCharacter>
 }
