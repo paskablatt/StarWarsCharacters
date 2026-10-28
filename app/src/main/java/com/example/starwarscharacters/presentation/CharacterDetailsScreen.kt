@@ -5,10 +5,10 @@ import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,106 +16,92 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.example.starwarscharacters.R
-import com.example.starwarscharacters.domain.StarWarsCharacter
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.starwarscharacters.R
 import com.example.starwarscharacters.di.AppContainer
+import com.example.starwarscharacters.domain.StarWarsCharacter
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterDetailsScreen(
     character: StarWarsCharacter,
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val favoritesViewModel: CharacterFavoritesViewModel = viewModel(
-        key = "character_favorite_${character.name}",
-        factory = CharacterFavoritesViewModel.factory(
+
+    val detailsViewModel: CharacterDetailsViewModel = viewModel(
+        key = "character_details_${character.name}",
+        factory = CharacterDetailsViewModel.factory(
             repository = AppContainer.favoritesRepository,
             character = character
         )
     )
 
-    val isFavorite by favoritesViewModel.isFavorite.collectAsState()
-    val isSaving by favoritesViewModel.isSaving.collectAsState()
-    val favoriteError by favoritesViewModel.error.collectAsState()
+    val state by detailsViewModel.uiState.collectAsState()
+
+    LaunchedEffect(detailsViewModel, context) {
+        detailsViewModel.events.collect { event ->
+            when (event) {
+                is CharacterDetailsEvent.Share -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, event.subject)
+                        putExtra(Intent.EXTRA_TEXT, event.text)
+                    }
+
+                    context.startActivity(
+                        Intent.createChooser(
+                            intent,
+                            "Поделиться персонажем"
+                        )
+                    )
+                }
+
+                is CharacterDetailsEvent.OpenWiki -> {
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse(event.url)
+                    )
+
+                    context.startActivity(intent)
+                }
+            }
+        }
+    }
+
+    CharacterDetailsContent(
+        state = state,
+        onBackClick = onBackClick,
+        onShareClick = detailsViewModel::onShareClick,
+        onWikiClick = detailsViewModel::onWikiClick,
+        onFavoriteClick = detailsViewModel::toggleFavorite
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CharacterDetailsContent(
+    state: CharacterDetailsUiModel,
+    onBackClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onWikiClick: () -> Unit,
+    onFavoriteClick: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text("Карточка персонажа")
                 },
-
                 navigationIcon = {
                     TextButton(onClick = onBackClick) {
                         Text("Назад")
                     }
                 },
-
                 actions = {
-                    IconButton(
-                        onClick = {
-
-                            val shareText = buildString {
-                                appendLine(character.name)
-                                appendLine()
-
-                                appendLine(
-                                    "Рост: ${formatMeasurement(character.height, "см")}"
-                                )
-                                appendLine(
-                                    "Вес: ${formatMeasurement(character.mass, "кг")}"
-                                )
-                                appendLine(
-                                    "Год рождения: ${character.birthYear}"
-                                )
-                                appendLine(
-                                    "Пол: ${character.gender}"
-                                )
-
-                                if (character.weaponName.isNotBlank()) {
-                                    appendLine(
-                                        "Оружие: ${character.weaponName}"
-                                    )
-                                }
-
-                                if (character.wikiUrl.isNotBlank()) {
-                                    appendLine()
-                                    appendLine(
-                                        "Подробнее на Вукипедии:"
-                                    )
-                                    append(character.wikiUrl)
-                                }
-                            }
-
-                            val shareIntent =
-                                Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-
-                                    putExtra(
-                                        Intent.EXTRA_SUBJECT,
-                                        character.name
-                                    )
-
-                                    putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        shareText
-                                    )
-                                }
-
-                            context.startActivity(
-                                Intent.createChooser(
-                                    shareIntent,
-                                    "Поделиться персонажем"
-                                )
-                            )
-                        }
-                    ) {
+                    IconButton(onClick = onShareClick) {
                         Icon(
                             painter = painterResource(
-                                id = R.drawable.ic_share
+                                R.drawable.ic_share
                             ),
                             contentDescription = "Поделиться"
                         )
@@ -124,7 +110,6 @@ fun CharacterDetailsScreen(
             )
         }
     ) { innerPadding ->
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -136,23 +121,18 @@ fun CharacterDetailsScreen(
                     top = 20.dp,
                     bottom = 30.dp
                 ),
-
             horizontalAlignment = Alignment.CenterHorizontally,
-
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
             Text(
-                text = character.name,
+                text = state.name,
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.fillMaxWidth()
             )
 
             Image(
-                painter = painterResource(
-                    id = character.imageRes
-                ),
-                contentDescription = character.name,
+                painter = painterResource(state.imageRes),
+                contentDescription = state.name,
                 modifier = Modifier
                     .size(120.dp)
                     .clip(RoundedCornerShape(18.dp)),
@@ -160,51 +140,54 @@ fun CharacterDetailsScreen(
             )
 
             Button(
-                onClick = favoritesViewModel::toggleFavorite,
-                enabled = isFavorite != null && !isSaving,
+                onClick = onFavoriteClick,
+                enabled = state.isFavorite != null &&
+                        !state.isSavingFavorite,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = when {
-                        isSaving -> "Сохранение…"
-                        isFavorite == null -> "Загрузка избранного…"
-                        isFavorite == true -> "★ Удалить из избранного"
-                        else -> "☆ В избранное"
+                        state.isSavingFavorite ->
+                            "Сохранение…"
+
+                        state.isFavorite == null ->
+                            "Загрузка избранного…"
+
+                        state.isFavorite == true ->
+                            "★ Удалить из избранного"
+
+                        else ->
+                            "☆ В избранное"
                     }
                 )
             }
 
-            favoriteError?.let { message ->
+            state.favoriteError?.let { message ->
                 Text(
                     text = message,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            // Оружие показываем только при наличии данных
 
-            val weaponImageRes = character.weaponImageRes
+            val weaponImageRes = state.weaponImageRes
 
             if (
                 weaponImageRes != null &&
-                character.weaponName.isNotBlank()
+                state.weaponName.isNotBlank()
             ) {
-
                 Card(
                     modifier = Modifier.fillMaxWidth()
                 ) {
-
                     Row(
                         modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement =
+                            Arrangement.spacedBy(16.dp)
                     ) {
-
                         Image(
-                            painter = painterResource(
-                                id = weaponImageRes
-                            ),
-                            contentDescription = character.weaponName,
+                            painter = painterResource(weaponImageRes),
+                            contentDescription = state.weaponName,
                             modifier = Modifier
                                 .size(
                                     width = 110.dp,
@@ -218,7 +201,6 @@ fun CharacterDetailsScreen(
                             verticalArrangement =
                                 Arrangement.spacedBy(6.dp)
                         ) {
-
                             Text(
                                 text = "Оружие",
                                 style =
@@ -226,7 +208,7 @@ fun CharacterDetailsScreen(
                             )
 
                             Text(
-                                text = character.weaponName,
+                                text = state.weaponName,
                                 style =
                                     MaterialTheme.typography.bodyLarge
                             )
@@ -235,85 +217,18 @@ fun CharacterDetailsScreen(
                 }
             }
 
-            // Основная информация
+            DetailsInfoCard(
+                title = "Основная информация",
+                lines = state.basicInfo
+            )
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            DetailsInfoCard(
+                title = "Внешность",
+                lines = state.appearance
+            )
 
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-
-                    Text(
-                        text = "Основная информация",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Рост: ${formatMeasurement(character.height, "см")}"
-                    )
-
-                    Text(
-                        "Вес: ${formatMeasurement(character.mass, "кг")}"
-                    )
-
-                    Text(
-                        "Год рождения: ${character.birthYear}"
-                    )
-
-                    Text(
-                        "Пол: ${character.gender}"
-                    )
-                }
-            }
-
-            // Внешность
-
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-
-                    Text(
-                        text = "Внешность",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Цвет волос: ${character.hairColor}"
-                    )
-
-                    Text(
-                        "Цвет кожи: ${character.skinColor}"
-                    )
-
-                    Text(
-                        "Цвет глаз: ${character.eyeColor}"
-                    )
-                }
-            }
-
-            // Wiki показываем только при наличии ссылки
-
-            if (character.wikiUrl.isNotBlank()) {
-
-                TextButton(
-                    onClick = {
-                        val browserIntent = Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(character.wikiUrl)
-                        )
-
-                        context.startActivity(browserIntent)
-                    }
-                ) {
-
+            if (state.wikiUrl.isNotBlank()) {
+                TextButton(onClick = onWikiClick) {
                     Text("Подробнее на Вукипедии")
                 }
             }
@@ -321,17 +236,26 @@ fun CharacterDetailsScreen(
     }
 }
 
-private fun formatMeasurement(
-    value: String,
-    unit: String
-): String {
-    return if (
-        value.equals("unknown", ignoreCase = true) ||
-        value.equals("n/a", ignoreCase = true) ||
-        value.isBlank()
+@Composable
+private fun DetailsInfoCard(
+    title: String,
+    lines: List<String>
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        "Нет данных"
-    } else {
-        "$value $unit"
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            lines.forEach { line ->
+                Text(line)
+            }
+        }
     }
 }

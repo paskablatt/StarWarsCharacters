@@ -1,24 +1,13 @@
 package com.example.starwarscharacters.presentation.films
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -27,12 +16,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.starwarscharacters.domain.Film
 
+@Composable
+fun FilmsScreen() {
+    val filmsViewModel: FilmsViewModel = viewModel()
+    val state by filmsViewModel.uiState.collectAsState()
+
+    FilmsContent(
+        state = state,
+        onRetryClick = filmsViewModel::retry
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilmsScreen(
-    viewModel: FilmsViewModel = viewModel()
+private fun FilmsContent(
+    state: FilmsUiState,
+    onRetryClick: () -> Unit
 ) {
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -42,9 +42,7 @@ fun FilmsScreen(
             )
         }
     ) { innerPadding ->
-
-        when (val state = viewModel.uiState) {
-
+        when (state) {
             FilmsUiState.Loading -> {
                 LoadingFilms(
                     modifier = Modifier.padding(innerPadding)
@@ -54,7 +52,7 @@ fun FilmsScreen(
             is FilmsUiState.Error -> {
                 FilmsError(
                     message = state.message,
-                    onRetryClick = viewModel::retry,
+                    onRetryClick = onRetryClick,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -74,13 +72,11 @@ private fun FilmsList(
     films: List<Film>,
     modifier: Modifier = Modifier
 ) {
-
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-
         items(films) { film ->
             FilmItem(film)
         }
@@ -91,17 +87,14 @@ private fun FilmsList(
 private fun FilmItem(
     film: Film
 ) {
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp)
     ) {
-
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-
             Text(
                 text = "ЭПИЗОД ${episodeRoman(film.episodeId)}",
                 color = MaterialTheme.colorScheme.primary,
@@ -145,20 +138,16 @@ private fun FilmItem(
 private fun LoadingFilms(
     modifier: Modifier = Modifier
 ) {
-
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
             CircularProgressIndicator()
-
-            Text("Загрузка фильмов...")
+            Text("Загрузка фильмов…")
         }
     }
 }
@@ -169,19 +158,16 @@ private fun FilmsError(
     onRetryClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-
     Box(
         modifier = modifier
             .fillMaxSize()
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
             Text(
                 text = "Не удалось загрузить данные",
                 style = MaterialTheme.typography.titleLarge
@@ -189,9 +175,7 @@ private fun FilmsError(
 
             Text(message)
 
-            Button(
-                onClick = onRetryClick
-            ) {
+            Button(onClick = onRetryClick) {
                 Text("Повторить")
             }
         }
@@ -210,7 +194,6 @@ private fun episodeRoman(episode: Int): String =
     }
 
 private fun formatDate(date: String): String {
-
     val parts = date.split("-")
 
     return if (parts.size == 3) {

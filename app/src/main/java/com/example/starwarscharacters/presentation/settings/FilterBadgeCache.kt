@@ -12,11 +12,4 @@ class FilterBadgeCache {
     fun update(filters: CharacterFilters) {
         _showBadge.value = filters.isActive
     }
-
-    // Совместимость с текущей ViewModel до следующего шага.
-    fun update(searchQuery: String) {
-        update(
-            CharacterFilters(query = searchQuery)
-        )
-    }
 }

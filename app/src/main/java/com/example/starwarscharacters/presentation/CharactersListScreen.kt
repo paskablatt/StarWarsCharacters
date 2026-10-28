@@ -17,16 +17,56 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.starwarscharacters.domain.HeightFilter
 import com.example.starwarscharacters.domain.StarWarsCharacter
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.starwarscharacters.di.AppContainer
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharactersListScreen(
     onCharacterClick: (StarWarsCharacter) -> Unit,
-    onSettingsClick: () -> Unit,
-    viewModel: CharactersViewModel
+    onSettingsClick: () -> Unit
 ) {
-    val showBadge by viewModel.showFilterBadge.collectAsState()
+    val charactersViewModel: CharactersViewModel = viewModel(
+        factory = CharactersViewModel.factory(
+            getCharactersPage =
+                AppContainer.getCharactersPageUseCase,
+            getFilteredCharacters =
+                AppContainer.getFilteredCharactersUseCase,
+            getFilmOptions =
+                AppContainer.getFilmFilterOptionsUseCase,
+            settingsRepository =
+                AppContainer.searchSettingsRepository,
+            badgeCache = AppContainer.filterBadgeCache
+        )
+    )
 
+    val state by charactersViewModel.uiState.collectAsState()
+    val showBadge by
+    charactersViewModel.showFilterBadge.collectAsState()
+
+    CharactersListContent(
+        state = state,
+        showBadge = showBadge,
+        onCharacterClick = onCharacterClick,
+        onSettingsClick = onSettingsClick,
+        onRetry = charactersViewModel::retry,
+        onPreviousPage = charactersViewModel::previousPage,
+        onNextPage = charactersViewModel::nextPage,
+        onFirstPage = charactersViewModel::firstPage
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CharactersListContent(
+    state: CharactersScreenState,
+    showBadge: Boolean,
+    onCharacterClick: (StarWarsCharacter) -> Unit,
+    onSettingsClick: () -> Unit,
+    onRetry: () -> Unit,
+    onPreviousPage: () -> Unit,
+    onNextPage: () -> Unit,
+    onFirstPage: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -34,7 +74,7 @@ fun CharactersListScreen(
                 actions = {
                     TextButton(
                         onClick = onSettingsClick,
-                        enabled = viewModel.settingsLoaded
+                        enabled = state.settingsLoaded
                     ) {
                         BadgedBox(
                             badge = {
@@ -60,29 +100,27 @@ fun CharactersListScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (viewModel.appliedFilters.isActive) {
-                ActiveFiltersSummary(viewModel)
+            if (state.appliedFilters.isActive) {
+                ActiveFiltersSummary(state)
             }
 
-            when (val state = viewModel.uiState) {
+            when (val content = state.content) {
                 CharactersUiState.Loading -> {
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(24.dp),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.spacedBy(
-                                16.dp,
-                                Alignment.CenterVertically
-                            )
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(
+                            16.dp,
+                            Alignment.CenterVertically
+                        )
                     ) {
                         CircularProgressIndicator()
 
                         Text(
-                            if (viewModel.appliedFilters.isActive) {
+                            if (state.appliedFilters.isActive) {
                                 "Подбираем персонажей…"
                             } else {
                                 "Загрузка страницы…"
@@ -97,24 +135,22 @@ fun CharactersListScreen(
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(24.dp),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.spacedBy(
-                                16.dp,
-                                Alignment.CenterVertically
-                            )
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(
+                            16.dp,
+                            Alignment.CenterVertically
+                        )
                     ) {
-                        Text(state.message)
+                        Text(content.message)
 
-                        Button(onClick = viewModel::retry) {
+                        Button(onClick = onRetry) {
                             Text("Повторить")
                         }
                     }
                 }
 
                 is CharactersUiState.Success -> {
-                    if (state.characters.isEmpty()) {
+                    if (content.characters.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -129,11 +165,11 @@ fun CharactersListScreen(
                         }
                     } else {
                         key(
-                            viewModel.currentPage,
-                            viewModel.appliedFilters
+                            state.currentPage,
+                            state.appliedFilters
                         ) {
                             CharactersList(
-                                characters = state.characters,
+                                characters = content.characters,
                                 onCharacterClick = onCharacterClick,
                                 modifier = Modifier.weight(1f)
                             )
@@ -142,8 +178,13 @@ fun CharactersListScreen(
                 }
             }
 
-            if (viewModel.settingsLoaded) {
-                PageNavigation(viewModel)
+            if (state.settingsLoaded) {
+                PageNavigation(
+                    state = state,
+                    onPreviousPage = onPreviousPage,
+                    onNextPage = onNextPage,
+                    onFirstPage = onFirstPage
+                )
             }
         }
     }
@@ -151,9 +192,9 @@ fun CharactersListScreen(
 
 @Composable
 private fun ActiveFiltersSummary(
-    viewModel: CharactersViewModel
+    state: CharactersScreenState
 ) {
-    val filters = viewModel.appliedFilters
+    val filters = state.appliedFilters
 
     val descriptions = buildList {
         if (filters.query.isNotBlank()) {
@@ -161,7 +202,7 @@ private fun ActiveFiltersSummary(
         }
 
         filters.episodeId?.let { episodeId ->
-            val filmTitle = viewModel.filmOptions
+            val filmTitle = state.filmOptions
                 .firstOrNull { it.episodeId == episodeId }
                 ?.title
                 ?: "Эпизод $episodeId"
@@ -191,9 +232,7 @@ private fun ActiveFiltersSummary(
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            val count = viewModel.filteredCount
-
-            if (count != null) {
+            state.filteredCount?.let { count ->
                 Text(
                     text = "Найдено: $count",
                     style = MaterialTheme.typography.bodySmall
@@ -205,15 +244,18 @@ private fun ActiveFiltersSummary(
 
 @Composable
 private fun PageNavigation(
-    viewModel: CharactersViewModel
+    state: CharactersScreenState,
+    onPreviousPage: () -> Unit,
+    onNextPage: () -> Unit,
+    onFirstPage: () -> Unit
 ) {
-    val pageReady = viewModel.uiState is CharactersUiState.Success
-    val totalPages = viewModel.totalFilteredPages
+    val pageReady = state.content is CharactersUiState.Success
+    val totalPages = state.totalFilteredPages
 
     val pageLabel = if (totalPages == null) {
-        "Стр. ${viewModel.currentPage}"
+        "Стр. ${state.currentPage}"
     } else {
-        "${viewModel.currentPage} / $totalPages"
+        "${state.currentPage} / $totalPages"
     }
 
     Surface(
@@ -236,8 +278,8 @@ private fun PageNavigation(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(
-                    onClick = viewModel::previousPage,
-                    enabled = pageReady && viewModel.currentPage > 1,
+                    onClick = onPreviousPage,
+                    enabled = pageReady && state.currentPage > 1,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
                         horizontal = 8.dp,
@@ -253,8 +295,8 @@ private fun PageNavigation(
                 )
 
                 Button(
-                    onClick = viewModel::nextPage,
-                    enabled = pageReady && viewModel.hasNextPage,
+                    onClick = onNextPage,
+                    enabled = pageReady && state.hasNextPage,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
                         horizontal = 8.dp,
@@ -265,9 +307,9 @@ private fun PageNavigation(
                 }
             }
 
-            if (viewModel.currentPage > 1) {
+            if (state.currentPage > 1) {
                 TextButton(
-                    onClick = viewModel::firstPage,
+                    onClick = onFirstPage,
                     enabled = pageReady
                 ) {
                     Text("На первую страницу")
@@ -305,8 +347,7 @@ private fun CharactersList(
                 Row(
                     modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement =
-                        Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Image(
                         painter = painterResource(character.imageRes),
@@ -319,8 +360,7 @@ private fun CharactersList(
 
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement =
-                            Arrangement.spacedBy(7.dp)
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         Text(
                             text = character.name,

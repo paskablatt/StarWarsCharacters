@@ -8,32 +8,73 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.starwarscharacters.di.AppContainer
 import com.example.starwarscharacters.domain.HeightFilter
-import com.example.starwarscharacters.presentation.CharactersViewModel
+
+@Composable
+fun SearchSettingsScreen(
+    onBackClick: () -> Unit
+) {
+    val settingsViewModel: SearchSettingsViewModel = viewModel(
+        factory = SearchSettingsViewModel.factory(
+            settingsRepository =
+                AppContainer.searchSettingsRepository,
+            getFilmOptions =
+                AppContainer.getFilmFilterOptionsUseCase,
+            badgeCache = AppContainer.filterBadgeCache
+        )
+    )
+
+    val state by settingsViewModel.uiState.collectAsState()
+    val currentOnBackClick by rememberUpdatedState(onBackClick)
+
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.savedEvents.collect {
+            currentOnBackClick()
+        }
+    }
+
+    SearchSettingsContent(
+        state = state,
+        onBackClick = onBackClick,
+        onQueryChange = settingsViewModel::onDraftSearchQueryChange,
+        onFilmChange = settingsViewModel::onDraftFilmChange,
+        onHeightChange = settingsViewModel::onDraftHeightChange,
+        onRetryFilms = settingsViewModel::loadFilmOptions,
+        onSave = settingsViewModel::saveSettings,
+        onReset = settingsViewModel::resetDraftSettings
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchSettingsScreen(
-    viewModel: CharactersViewModel,
-    onBackClick: () -> Unit
+private fun SearchSettingsContent(
+    state: SearchSettingsUiState,
+    onBackClick: () -> Unit,
+    onQueryChange: (String) -> Unit,
+    onFilmChange: (Int?) -> Unit,
+    onHeightChange: (HeightFilter) -> Unit,
+    onRetryFilms: () -> Unit,
+    onSave: () -> Unit,
+    onReset: () -> Unit
 ) {
     var filmMenuExpanded by remember { mutableStateOf(false) }
     var heightMenuExpanded by remember { mutableStateOf(false) }
 
-    val draft = viewModel.draftFilters
-    val canEdit = viewModel.settingsLoaded &&
-            !viewModel.isSavingSettings
+    val draft = state.draftFilters
+    val canEdit = state.settingsLoaded && !state.isSavingSettings
 
     val filmTitle = if (draft.episodeId == null) {
         "Все фильмы"
     } else {
-        viewModel.filmOptions
+        state.filmOptions
             .firstOrNull { it.episodeId == draft.episodeId }
             ?.title
             ?: "Эпизод ${draft.episodeId}"
     }
 
-    BackHandler(enabled = viewModel.isSavingSettings) {}
+    BackHandler(enabled = state.isSavingSettings) {}
 
     Scaffold(
         topBar = {
@@ -42,7 +83,7 @@ fun SearchSettingsScreen(
                 navigationIcon = {
                     TextButton(
                         onClick = onBackClick,
-                        enabled = !viewModel.isSavingSettings
+                        enabled = !state.isSavingSettings
                     ) {
                         Text("Назад")
                     }
@@ -65,7 +106,7 @@ fun SearchSettingsScreen(
 
             OutlinedTextField(
                 value = draft.query,
-                onValueChange = viewModel::onDraftSearchQueryChange,
+                onValueChange = onQueryChange,
                 label = { Text("Имя персонажа") },
                 placeholder = { Text("Например: Luke") },
                 singleLine = true,
@@ -100,21 +141,21 @@ fun SearchSettingsScreen(
                     ) {
                         DropdownMenuItem(
                             text = { Text("Все фильмы") },
+                            enabled = canEdit,
                             onClick = {
-                                viewModel.onDraftFilmChange(null)
+                                onFilmChange(null)
                                 filmMenuExpanded = false
                             }
                         )
 
-                        viewModel.filmOptions.forEach { film ->
+                        state.filmOptions.forEach { film ->
                             DropdownMenuItem(
                                 text = {
                                     Text(film.title)
                                 },
+                                enabled = canEdit,
                                 onClick = {
-                                    viewModel.onDraftFilmChange(
-                                        film.episodeId
-                                    )
+                                    onFilmChange(film.episodeId)
                                     filmMenuExpanded = false
                                 }
                             )
@@ -122,7 +163,7 @@ fun SearchSettingsScreen(
                     }
                 }
 
-                if (viewModel.isLoadingFilms) {
+                if (state.isLoadingFilms) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -130,16 +171,15 @@ fun SearchSettingsScreen(
                     Text("Загрузка списка фильмов…")
                 }
 
-                viewModel.filmsError?.let { message ->
+                state.filmsError?.let { message ->
                     Text(
                         text = message,
                         color = MaterialTheme.colorScheme.error
                     )
 
                     TextButton(
-                        onClick = viewModel::loadFilmOptions,
-                        enabled = canEdit &&
-                                !viewModel.isLoadingFilms
+                        onClick = onRetryFilms,
+                        enabled = canEdit && !state.isLoadingFilms
                     ) {
                         Text("Повторить загрузку фильмов")
                     }
@@ -176,10 +216,9 @@ fun SearchSettingsScreen(
                                 text = {
                                     Text(filter.title)
                                 },
+                                enabled = canEdit,
                                 onClick = {
-                                    viewModel.onDraftHeightChange(
-                                        filter
-                                    )
+                                    onHeightChange(filter)
                                     heightMenuExpanded = false
                                 }
                             )
@@ -195,14 +234,12 @@ fun SearchSettingsScreen(
             )
 
             Button(
-                onClick = {
-                    viewModel.saveSettings(onSaved = onBackClick)
-                },
+                onClick = onSave,
                 enabled = canEdit,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (viewModel.isSavingSettings) {
+                    if (state.isSavingSettings) {
                         "Сохранение…"
                     } else {
                         "Готово"
@@ -211,7 +248,7 @@ fun SearchSettingsScreen(
             }
 
             TextButton(
-                onClick = viewModel::resetDraftSettings,
+                onClick = onReset,
                 enabled = canEdit,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -223,7 +260,7 @@ fun SearchSettingsScreen(
                 style = MaterialTheme.typography.bodySmall
             )
 
-            viewModel.settingsError?.let { message ->
+            state.settingsError?.let { message ->
                 Text(
                     text = message,
                     color = MaterialTheme.colorScheme.error
