@@ -15,5 +15,8 @@ data class FilmDto(
     val producer: String,
 
     @SerializedName("release_date")
-    val releaseDate: String
+    val releaseDate: String,
+
+    // Ссылки на персонажей, появляющихся в фильме.
+    val characters: List<String>? = null
 )

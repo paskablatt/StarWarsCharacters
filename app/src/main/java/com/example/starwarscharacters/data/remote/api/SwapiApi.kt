@@ -16,7 +16,8 @@ interface SwapiApi {
 
     @GET("people/")
     suspend fun searchCharacters(
-        @Query("search") search: String
+        @Query("search") search: String,
+        @Query("page") page: Int = 1
     ): CharactersResponseDto
 
     @GET("people/{id}/")
