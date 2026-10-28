@@ -1,22 +1,24 @@
 package com.example.starwarscharacters.navigation
 
+import android.os.Bundle
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.example.starwarscharacters.R
-import com.example.starwarscharacters.di.AppContainer
+import com.example.starwarscharacters.domain.StarWarsCharacter
 import com.example.starwarscharacters.presentation.CharacterDetailsScreen
 import com.example.starwarscharacters.presentation.CharactersListScreen
-import com.example.starwarscharacters.presentation.CharactersUiState
-import com.example.starwarscharacters.presentation.CharactersViewModel
 import com.example.starwarscharacters.presentation.FavoritesScreen
 import com.example.starwarscharacters.presentation.PlaceholderScreen
 import com.example.starwarscharacters.presentation.films.FilmsScreen
@@ -35,15 +37,31 @@ private data class BottomTab(
 )
 
 private val bottomTabs = listOf(
-    BottomTab(HOME_TAB, "Главная", R.drawable.ic_home),
     BottomTab(
-        CHARACTERS_TAB,
-        "Персонажи",
-        R.drawable.ic_stormtrooper
+        route = HOME_TAB,
+        title = "Главная",
+        iconRes = R.drawable.ic_home
     ),
-    BottomTab(FILMS_TAB, "Фильмы", R.drawable.ic_video),
-    BottomTab(GALAXY_TAB, "Галактика", R.drawable.ic_galaxy),
-    BottomTab(FAVORITES_TAB, "Избранное", null)
+    BottomTab(
+        route = CHARACTERS_TAB,
+        title = "Персонажи",
+        iconRes = R.drawable.ic_stormtrooper
+    ),
+    BottomTab(
+        route = FILMS_TAB,
+        title = "Фильмы",
+        iconRes = R.drawable.ic_video
+    ),
+    BottomTab(
+        route = GALAXY_TAB,
+        title = "Галактика",
+        iconRes = R.drawable.ic_galaxy
+    ),
+    BottomTab(
+        route = FAVORITES_TAB,
+        title = "Избранное",
+        iconRes = null
+    )
 )
 
 @Composable
@@ -52,6 +70,7 @@ fun AppNavigation() {
 
     val backStackEntry by
     rootNavController.currentBackStackEntryAsState()
+
     val currentRoute = backStackEntry?.destination?.route
 
     Scaffold(
@@ -70,6 +89,7 @@ fun AppNavigation() {
                                 ) {
                                     saveState = true
                                 }
+
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -149,21 +169,13 @@ private fun starWarsNavigationColors() =
 
 @Composable
 private fun CharactersNavigation() {
-    val charactersViewModel: CharactersViewModel = viewModel(
-        factory = CharactersViewModel.factory(
-            getCharactersPage =
-                AppContainer.getCharactersPageUseCase,
-            getFilteredCharacters =
-                AppContainer.getFilteredCharactersUseCase,
-            getFilmOptions =
-                AppContainer.getFilmFilterOptionsUseCase,
-            settingsRepository =
-                AppContainer.searchSettingsRepository,
-            badgeCache = AppContainer.filterBadgeCache
-        )
-    )
-
     val navController = rememberNavController()
+
+    var selectedCharacter by rememberSaveable(
+        stateSaver = SelectedCharacterSaver
+    ) {
+        mutableStateOf<StarWarsCharacter?>(null)
+    }
 
     NavHost(
         navController = navController,
@@ -171,27 +183,16 @@ private fun CharactersNavigation() {
     ) {
         composable("characters_list") {
             CharactersListScreen(
-                viewModel = charactersViewModel,
                 onSettingsClick = {
-                    charactersViewModel.beginEditingSettings()
-
                     navController.navigate("search_settings") {
                         launchSingleTop = true
                     }
                 },
                 onCharacterClick = { character ->
-                    val characters =
-                        (charactersViewModel.uiState
-                                as? CharactersUiState.Success)
-                            ?.characters
-                            .orEmpty()
+                    selectedCharacter = character
 
-                    val index = characters.indexOf(character)
-
-                    if (index >= 0) {
-                        navController.navigate(
-                            "character_details/$index"
-                        )
+                    navController.navigate("character_details") {
+                        launchSingleTop = true
                     }
                 }
             )
@@ -199,73 +200,99 @@ private fun CharactersNavigation() {
 
         composable("search_settings") {
             SearchSettingsScreen(
-                viewModel = charactersViewModel,
                 onBackClick = {
                     navController.popBackStack()
                 }
             )
         }
 
-        composable("character_details/{index}") { entry ->
-            val index = entry.arguments
-                ?.getString("index")
-                ?.toIntOrNull()
+        composable("character_details") {
+            val character = selectedCharacter
 
-            val state = charactersViewModel.uiState
+            if (character != null) {
+                CharacterDetailsScreen(
+                    character = character,
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally,
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            16.dp,
+                            Alignment.CenterVertically
+                        )
+                ) {
+                    Text("Не удалось открыть карточку персонажа")
 
-            val characters =
-                (state as? CharactersUiState.Success)
-                    ?.characters
-                    .orEmpty()
-
-            val character = index?.let {
-                characters.getOrNull(it)
-            }
-
-            when {
-                character != null -> {
-                    CharacterDetailsScreen(
-                        character = character,
-                        onBackClick = {
+                    TextButton(
+                        onClick = {
                             navController.popBackStack()
                         }
-                    )
-                }
-
-                state is CharactersUiState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                else -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.spacedBy(
-                                16.dp,
-                                Alignment.CenterVertically
-                            )
-                    ) {
-                        Text("Не удалось открыть карточку персонажа")
-
-                        TextButton(
-                            onClick = {
-                                navController.popBackStack()
-                            }
-                        ) {
-                            Text("К списку")
-                        }
+                        Text("К списку")
                     }
                 }
             }
         }
     }
 }
+
+private val SelectedCharacterSaver =
+    Saver<StarWarsCharacter?, Bundle>(
+        save = { character ->
+            character?.let {
+                Bundle().apply {
+                    putString("name", it.name)
+                    putInt("imageRes", it.imageRes)
+
+                    it.weaponImageRes?.let { imageRes ->
+                        putInt("weaponImageRes", imageRes)
+                    }
+
+                    putString("weaponName", it.weaponName)
+                    putString("height", it.height)
+                    putString("mass", it.mass)
+                    putString("hairColor", it.hairColor)
+                    putString("skinColor", it.skinColor)
+                    putString("eyeColor", it.eyeColor)
+                    putString("birthYear", it.birthYear)
+                    putString("gender", it.gender)
+                    putString("wikiUrl", it.wikiUrl)
+                }
+            }
+        },
+        restore = { bundle ->
+            StarWarsCharacter(
+                name = bundle.getString("name").orEmpty(),
+                imageRes = bundle.getInt("imageRes"),
+                weaponImageRes = if (
+                    bundle.containsKey("weaponImageRes")
+                ) {
+                    bundle.getInt("weaponImageRes")
+                } else {
+                    null
+                },
+                weaponName =
+                    bundle.getString("weaponName").orEmpty(),
+                height = bundle.getString("height").orEmpty(),
+                mass = bundle.getString("mass").orEmpty(),
+                hairColor =
+                    bundle.getString("hairColor").orEmpty(),
+                skinColor =
+                    bundle.getString("skinColor").orEmpty(),
+                eyeColor =
+                    bundle.getString("eyeColor").orEmpty(),
+                birthYear =
+                    bundle.getString("birthYear").orEmpty(),
+                gender = bundle.getString("gender").orEmpty(),
+                wikiUrl = bundle.getString("wikiUrl").orEmpty()
+            )
+        }
+    )

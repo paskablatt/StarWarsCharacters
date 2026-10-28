@@ -11,7 +11,6 @@ data class CharactersPage(
 
 interface CharactersRepository {
 
-    suspend fun getCharacters(): List<StarWarsCharacter>
 
     suspend fun getCharactersPage(
         page: Int

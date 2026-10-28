@@ -15,11 +15,6 @@ class CharactersRepositoryImpl(
     private val api: SwapiApi
 ) : CharactersRepository {
 
-    override suspend fun getCharacters(): List<StarWarsCharacter> =
-        withContext(Dispatchers.IO) {
-            loadAllCharacterDtos(query = "")
-                .map { it.toDomainOrNull() }
-        }
 
     override suspend fun getCharactersPage(
         page: Int

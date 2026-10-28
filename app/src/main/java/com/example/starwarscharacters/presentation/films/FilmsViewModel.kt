@@ -1,43 +1,45 @@
 package com.example.starwarscharacters.presentation.films
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.starwarscharacters.di.AppContainer
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class FilmsViewModel : ViewModel() {
 
-    var uiState by mutableStateOf<FilmsUiState>(
-        FilmsUiState.Loading
-    )
-        private set
+    private val _uiState =
+        MutableStateFlow<FilmsUiState>(FilmsUiState.Loading)
+
+    val uiState = _uiState.asStateFlow()
+
+    private var loadRequest: Job? = null
 
     init {
         loadFilms()
     }
 
     fun loadFilms() {
-        viewModelScope.launch {
+        if (loadRequest?.isActive == true) return
 
-            uiState = FilmsUiState.Loading
+        _uiState.value = FilmsUiState.Loading
 
-            uiState = try {
-
+        loadRequest = viewModelScope.launch {
+            try {
                 val films = AppContainer.getFilmsUseCase()
 
-                FilmsUiState.Success(
+                _uiState.value = FilmsUiState.Success(
                     films = films
                 )
-
-            } catch (exception: Exception) {
-
-                exception.printStackTrace()
-
-                FilmsUiState.Error(
-                    message = "Не удалось загрузить фильмы. Проверьте подключение к интернету."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = FilmsUiState.Error(
+                    message = "Не удалось загрузить фильмы. " +
+                            "Проверьте подключение к интернету."
                 )
             }
         }

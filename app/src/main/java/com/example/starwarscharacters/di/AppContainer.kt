@@ -14,7 +14,6 @@ import com.example.starwarscharacters.domain.repository.FilmsRepository
 import com.example.starwarscharacters.domain.repository.SearchSettingsRepository
 import com.example.starwarscharacters.domain.usecase.GetCharacterUseCase
 import com.example.starwarscharacters.domain.usecase.GetCharactersPageUseCase
-import com.example.starwarscharacters.domain.usecase.GetCharactersUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilmFilterOptionsUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilteredCharactersUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilmsUseCase
@@ -73,9 +72,7 @@ object AppContainer {
         )
     }
 
-    val getCharactersUseCase: GetCharactersUseCase by lazy {
-        GetCharactersUseCase(charactersRepository)
-    }
+
 
     val getCharactersPageUseCase: GetCharactersPageUseCase by lazy {
         GetCharactersPageUseCase(charactersRepository)
