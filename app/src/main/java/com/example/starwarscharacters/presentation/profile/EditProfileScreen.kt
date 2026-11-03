@@ -42,7 +42,10 @@ fun EditProfileScreen(
         factory = EditProfileViewModel.factory(
             observeProfile = AppContainer.observeProfileUseCase,
             saveProfile = AppContainer.saveProfileUseCase,
-            photoRepository = AppContainer.profilePhotoRepository
+            photoRepository = AppContainer.profilePhotoRepository,
+            getClassReminderTime =
+                AppContainer.getClassReminderTimeUseCase,
+            reminderScheduler = AppContainer.classReminderScheduler
         )
     )
 
@@ -159,6 +162,8 @@ fun EditProfileScreen(
         onFullNameChange = editViewModel::onFullNameChange,
         onPositionChange = editViewModel::onPositionChange,
         onResumeUrlChange = editViewModel::onResumeUrlChange,
+        onFavoriteClassTimeChange =
+            editViewModel::onFavoriteClassTimeChange,
         onRemovePhoto = editViewModel::onRemovePhoto,
         onSaveClick = editViewModel::save,
         onRetryClick = editViewModel::loadProfile,
@@ -200,6 +205,7 @@ private fun EditProfileContent(
     onFullNameChange: (String) -> Unit,
     onPositionChange: (String) -> Unit,
     onResumeUrlChange: (String) -> Unit,
+    onFavoriteClassTimeChange: (String) -> Unit,
     onRemovePhoto: () -> Unit,
     onSaveClick: () -> Unit,
     onRetryClick: () -> Unit,
@@ -211,7 +217,7 @@ private fun EditProfileContent(
     }
 
     val busy = state.isSaving || state.isProcessingPhoto
-    val canEdit = state.isLoaded && !state.isLoading && !busy
+    val canEdit = state.canEdit
 
     BackHandler(enabled = busy) {}
 
@@ -295,12 +301,10 @@ private fun EditProfileContent(
                     }
                 },
                 actions = {
-                    TextButton(
-                        onClick = onSaveClick,
-                        enabled = canEdit
-                    ) {
-                        Text("Готово")
-                    }
+                    ReminderSaveButton(
+                        enabled = state.canSave,
+                        onSave = onSaveClick
+                    )
                 }
             )
         }
@@ -375,14 +379,19 @@ private fun EditProfileContent(
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth()
                         )
+
                         Text("Подготовка фотографии…")
                     }
 
                     OutlinedTextField(
                         value = state.fullName,
                         onValueChange = onFullNameChange,
-                        label = { Text("ФИО") },
-                        placeholder = { Text("Введите ваше ФИО") },
+                        label = {
+                            Text("ФИО")
+                        },
+                        placeholder = {
+                            Text("Введите ваше ФИО")
+                        },
                         singleLine = true,
                         enabled = canEdit,
                         keyboardOptions = KeyboardOptions(
@@ -395,7 +404,9 @@ private fun EditProfileContent(
                     OutlinedTextField(
                         value = state.position,
                         onValueChange = onPositionChange,
-                        label = { Text("Должность") },
+                        label = {
+                            Text("Должность")
+                        },
                         placeholder = {
                             Text("Например: Android-разработчик")
                         },
@@ -411,7 +422,9 @@ private fun EditProfileContent(
                     OutlinedTextField(
                         value = state.resumeUrl,
                         onValueChange = onResumeUrlChange,
-                        label = { Text("Ссылка на резюме") },
+                        label = {
+                            Text("Ссылка на резюме")
+                        },
                         placeholder = {
                             Text("https://example.com/resume.pdf")
                         },
@@ -425,8 +438,24 @@ private fun EditProfileContent(
                         enabled = canEdit,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Done
+                            imeAction = ImeAction.Next
                         ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    FavoriteClassTimeField(
+                        value = state.favoriteClassTime,
+                        onValueChange = onFavoriteClassTimeChange,
+                        error = state.favoriteClassTimeError,
+                        enabled = canEdit
+                    )
+
+                    Text(
+                        text = "Напоминание будет установлено на сегодня. " +
+                                "Выберите время позже текущего.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color =
+                            MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -442,7 +471,8 @@ private fun EditProfileContent(
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Text("Сохранение профиля…")
+
+                        Text("Сохранение профиля и напоминания…")
                     }
 
                     Text(
