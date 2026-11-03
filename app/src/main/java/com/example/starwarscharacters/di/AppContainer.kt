@@ -7,16 +7,25 @@ import com.example.starwarscharacters.data.remote.RetrofitClient
 import com.example.starwarscharacters.data.repository.CharactersRepositoryImpl
 import com.example.starwarscharacters.data.repository.FavoritesRepositoryImpl
 import com.example.starwarscharacters.data.repository.FilmsRepositoryImpl
+import com.example.starwarscharacters.data.repository.ProfilePhotoRepositoryImpl
+import com.example.starwarscharacters.data.repository.ProfileRepositoryImpl
+import com.example.starwarscharacters.data.repository.ResumeRepositoryImpl
 import com.example.starwarscharacters.data.repository.SearchSettingsRepositoryImpl
 import com.example.starwarscharacters.domain.repository.CharactersRepository
 import com.example.starwarscharacters.domain.repository.FavoritesRepository
 import com.example.starwarscharacters.domain.repository.FilmsRepository
+import com.example.starwarscharacters.domain.repository.ProfilePhotoRepository
+import com.example.starwarscharacters.domain.repository.ProfileRepository
+import com.example.starwarscharacters.domain.repository.ResumeRepository
 import com.example.starwarscharacters.domain.repository.SearchSettingsRepository
+import com.example.starwarscharacters.domain.usecase.DownloadResumeUseCase
 import com.example.starwarscharacters.domain.usecase.GetCharacterUseCase
 import com.example.starwarscharacters.domain.usecase.GetCharactersPageUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilmFilterOptionsUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilteredCharactersUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilmsUseCase
+import com.example.starwarscharacters.domain.usecase.ObserveProfileUseCase
+import com.example.starwarscharacters.domain.usecase.SaveProfileUseCase
 import com.example.starwarscharacters.domain.usecase.SearchCharactersUseCase
 import com.example.starwarscharacters.presentation.settings.FilterBadgeCache
 
@@ -56,6 +65,24 @@ object AppContainer {
         )
     }
 
+    val profileRepository: ProfileRepository by lazy {
+        ProfileRepositoryImpl(
+            context = requireApplicationContext()
+        )
+    }
+
+    val profilePhotoRepository: ProfilePhotoRepository by lazy {
+        ProfilePhotoRepositoryImpl(
+            context = requireApplicationContext()
+        )
+    }
+
+    private val resumeRepository: ResumeRepository by lazy {
+        ResumeRepositoryImpl(
+            context = requireApplicationContext()
+        )
+    }
+
     val filterBadgeCache: FilterBadgeCache by lazy {
         FilterBadgeCache()
     }
@@ -71,8 +98,6 @@ object AppContainer {
             api = RetrofitClient.api
         )
     }
-
-
 
     val getCharactersPageUseCase: GetCharactersPageUseCase by lazy {
         GetCharactersPageUseCase(charactersRepository)
@@ -98,5 +123,17 @@ object AppContainer {
     val getFilmFilterOptionsUseCase:
             GetFilmFilterOptionsUseCase by lazy {
         GetFilmFilterOptionsUseCase(charactersRepository)
+    }
+
+    val observeProfileUseCase: ObserveProfileUseCase by lazy {
+        ObserveProfileUseCase(profileRepository)
+    }
+
+    val saveProfileUseCase: SaveProfileUseCase by lazy {
+        SaveProfileUseCase(profileRepository)
+    }
+
+    val downloadResumeUseCase: DownloadResumeUseCase by lazy {
+        DownloadResumeUseCase(resumeRepository)
     }
 }

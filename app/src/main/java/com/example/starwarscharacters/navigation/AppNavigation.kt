@@ -22,12 +22,14 @@ import com.example.starwarscharacters.presentation.CharactersListScreen
 import com.example.starwarscharacters.presentation.FavoritesScreen
 import com.example.starwarscharacters.presentation.PlaceholderScreen
 import com.example.starwarscharacters.presentation.films.FilmsScreen
+import com.example.starwarscharacters.presentation.profile.EditProfileScreen
+import com.example.starwarscharacters.presentation.profile.ProfileScreen
 import com.example.starwarscharacters.presentation.settings.SearchSettingsScreen
 
 private const val CHARACTERS_TAB = "characters_tab"
 private const val HOME_TAB = "home_tab"
 private const val FILMS_TAB = "films_tab"
-private const val GALAXY_TAB = "galaxy_tab"
+private const val PROFILE_TAB = "profile_tab"
 private const val FAVORITES_TAB = "favorites_tab"
 
 private data class BottomTab(
@@ -53,9 +55,9 @@ private val bottomTabs = listOf(
         iconRes = R.drawable.ic_video
     ),
     BottomTab(
-        route = GALAXY_TAB,
-        title = "Галактика",
-        iconRes = R.drawable.ic_galaxy
+        route = PROFILE_TAB,
+        title = "Профиль",
+        iconRes = R.drawable.ic_profile
     ),
     BottomTab(
         route = FAVORITES_TAB,
@@ -140,12 +142,8 @@ fun AppNavigation() {
                 FilmsScreen()
             }
 
-            composable(GALAXY_TAB) {
-                PlaceholderScreen(
-                    title = "Галактика",
-                    description =
-                        "Исследование галактики появится позже"
-                )
+            composable(PROFILE_TAB) {
+                ProfileNavigation()
             }
 
             composable(FAVORITES_TAB) {
@@ -166,6 +164,34 @@ private fun starWarsNavigationColors() =
         unselectedTextColor =
             MaterialTheme.colorScheme.onSurfaceVariant
     )
+
+@Composable
+private fun ProfileNavigation() {
+    val navController = rememberNavController()
+
+    NavHost(
+        navController = navController,
+        startDestination = "profile"
+    ) {
+        composable("profile") {
+            ProfileScreen(
+                onEditClick = {
+                    navController.navigate("edit_profile") {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable("edit_profile") {
+            EditProfileScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+    }
+}
 
 @Composable
 private fun CharactersNavigation() {
