@@ -3,6 +3,7 @@ package com.example.starwarscharacters.di
 import android.content.Context
 import androidx.room.Room
 import com.example.starwarscharacters.data.local.database.StarWarsDatabase
+import com.example.starwarscharacters.data.notification.AlarmManagerClassReminderScheduler
 import com.example.starwarscharacters.data.remote.RetrofitClient
 import com.example.starwarscharacters.data.repository.CharactersRepositoryImpl
 import com.example.starwarscharacters.data.repository.FavoritesRepositoryImpl
@@ -11,6 +12,7 @@ import com.example.starwarscharacters.data.repository.ProfilePhotoRepositoryImpl
 import com.example.starwarscharacters.data.repository.ProfileRepositoryImpl
 import com.example.starwarscharacters.data.repository.ResumeRepositoryImpl
 import com.example.starwarscharacters.data.repository.SearchSettingsRepositoryImpl
+import com.example.starwarscharacters.domain.reminder.ClassReminderScheduler
 import com.example.starwarscharacters.domain.repository.CharactersRepository
 import com.example.starwarscharacters.domain.repository.FavoritesRepository
 import com.example.starwarscharacters.domain.repository.FilmsRepository
@@ -21,6 +23,7 @@ import com.example.starwarscharacters.domain.repository.SearchSettingsRepository
 import com.example.starwarscharacters.domain.usecase.DownloadResumeUseCase
 import com.example.starwarscharacters.domain.usecase.GetCharacterUseCase
 import com.example.starwarscharacters.domain.usecase.GetCharactersPageUseCase
+import com.example.starwarscharacters.domain.usecase.GetClassReminderTimeUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilmFilterOptionsUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilteredCharactersUseCase
 import com.example.starwarscharacters.domain.usecase.GetFilmsUseCase
@@ -83,6 +86,12 @@ object AppContainer {
         )
     }
 
+    val classReminderScheduler: ClassReminderScheduler by lazy {
+        AlarmManagerClassReminderScheduler(
+            context = requireApplicationContext()
+        )
+    }
+
     val filterBadgeCache: FilterBadgeCache by lazy {
         FilterBadgeCache()
     }
@@ -135,5 +144,10 @@ object AppContainer {
 
     val downloadResumeUseCase: DownloadResumeUseCase by lazy {
         DownloadResumeUseCase(resumeRepository)
+    }
+
+    val getClassReminderTimeUseCase:
+            GetClassReminderTimeUseCase by lazy {
+        GetClassReminderTimeUseCase()
     }
 }

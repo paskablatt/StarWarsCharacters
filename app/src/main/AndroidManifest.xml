@@ -15,6 +15,12 @@
     <uses-permission
         android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
@@ -40,6 +46,11 @@
                 android:resource="@xml/file_paths" />
 
         </provider>
+
+        <receiver
+            android:name=".data.notification.ClassReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"

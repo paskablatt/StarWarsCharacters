@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.starwarscharacters.domain.UserProfile
+import com.example.starwarscharacters.domain.reminder.ClassReminderScheduler
 import com.example.starwarscharacters.domain.repository.ProfilePhotoRepository
+import com.example.starwarscharacters.domain.usecase.GetClassReminderTimeUseCase
 import com.example.starwarscharacters.domain.usecase.ObserveProfileUseCase
 import com.example.starwarscharacters.domain.usecase.SaveProfileUseCase
+import com.example.starwarscharacters.domain.validation.FavoriteClassTimeValidator
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -23,17 +26,43 @@ data class EditProfileUiState(
     val photoUri: String = "",
     val resumeUrl: String = "",
     val position: String = "",
+    val favoriteClassTime: String = "",
     val isLoading: Boolean = true,
     val isLoaded: Boolean = false,
     val isSaving: Boolean = false,
     val isProcessingPhoto: Boolean = false,
     val error: String? = null
-)
+) {
+    val favoriteClassTimeError: String?
+        get() = when {
+            !isLoaded -> null
+
+            favoriteClassTime.isEmpty() ->
+                "Укажите время любимой пары"
+
+            !FavoriteClassTimeValidator.isValid(favoriteClassTime) ->
+                "Некорректное время. Используйте HH:mm, от 00:00 до 23:59"
+
+            else -> null
+        }
+
+    val canEdit: Boolean
+        get() = isLoaded &&
+                !isLoading &&
+                !isSaving &&
+                !isProcessingPhoto
+
+    val canSave: Boolean
+        get() = canEdit &&
+                FavoriteClassTimeValidator.isValid(favoriteClassTime)
+}
 
 class EditProfileViewModel(
     private val observeProfile: ObserveProfileUseCase,
     private val saveProfile: SaveProfileUseCase,
-    private val photoRepository: ProfilePhotoRepository
+    private val photoRepository: ProfilePhotoRepository,
+    private val getClassReminderTime: GetClassReminderTimeUseCase,
+    private val reminderScheduler: ClassReminderScheduler
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EditProfileUiState())
@@ -75,6 +104,7 @@ class EditProfileViewModel(
                         photoUri = profile.photoUri,
                         resumeUrl = profile.resumeUrl,
                         position = profile.position,
+                        favoriteClassTime = profile.favoriteClassTime,
                         isLoading = false,
                         isLoaded = true,
                         error = null
@@ -96,7 +126,7 @@ class EditProfileViewModel(
     }
 
     fun onFullNameChange(value: String) {
-        if (!canEdit()) return
+        if (!_uiState.value.canEdit) return
 
         _uiState.update {
             it.copy(fullName = value, error = null)
@@ -104,7 +134,7 @@ class EditProfileViewModel(
     }
 
     fun onPositionChange(value: String) {
-        if (!canEdit()) return
+        if (!_uiState.value.canEdit) return
 
         _uiState.update {
             it.copy(position = value, error = null)
@@ -112,15 +142,26 @@ class EditProfileViewModel(
     }
 
     fun onResumeUrlChange(value: String) {
-        if (!canEdit()) return
+        if (!_uiState.value.canEdit) return
 
         _uiState.update {
             it.copy(resumeUrl = value, error = null)
         }
     }
 
+    fun onFavoriteClassTimeChange(value: String) {
+        if (!_uiState.value.canEdit) return
+
+        _uiState.update {
+            it.copy(
+                favoriteClassTime = value,
+                error = null
+            )
+        }
+    }
+
     fun onRemovePhoto() {
-        if (!canEdit()) return
+        if (!_uiState.value.canEdit) return
 
         _uiState.update {
             it.copy(
@@ -140,7 +181,7 @@ class EditProfileViewModel(
     }
 
     fun onCameraClick() {
-        if (!canEdit()) return
+        if (!_uiState.value.canEdit) return
 
         _uiState.update {
             it.copy(
@@ -277,15 +318,15 @@ class EditProfileViewModel(
     }
 
     fun save() {
-        if (!canEdit()) return
-
         val state = _uiState.value
+        if (!state.canSave) return
 
         val profile = UserProfile(
             fullName = state.fullName,
             photoUri = state.photoUri,
             resumeUrl = state.resumeUrl,
-            position = state.position
+            position = state.position,
+            favoriteClassTime = state.favoriteClassTime
         )
 
         _uiState.update {
@@ -296,43 +337,85 @@ class EditProfileViewModel(
         }
 
         viewModelScope.launch {
+            var profileWasSaved = false
+
             try {
+                // Проверяем время до записи профиля.
+                val triggerAtMillis = getClassReminderTime(
+                    profile.favoriteClassTime
+                )
+
+                check(reminderScheduler.canShowNotifications()) {
+                    "Разрешите уведомления для приложения"
+                }
+
+                check(reminderScheduler.canScheduleExactReminders()) {
+                    "Разрешите приложению устанавливать точные напоминания"
+                }
+
                 saveProfile(profile)
+                profileWasSaved = true
+
+                reminderScheduler.schedule(
+                    profileName = profile.fullName,
+                    triggerAtMillis = triggerAtMillis
+                )
             } catch (e: CancellationException) {
                 _uiState.update {
                     it.copy(isSaving = false)
                 }
                 throw e
-            } catch (e: IllegalArgumentException) {
-                _uiState.update {
-                    it.copy(
-                        isSaving = false,
-                        error = e.message ?: "Проверьте поля профиля"
-                    )
-                }
-                return@launch
-            } catch (_: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isSaving = false,
-                        error = "Не удалось сохранить профиль. " +
-                                "Попробуйте ещё раз."
-                    )
-                }
+            } catch (e: Exception) {
+                reportSaveError(
+                    error = e,
+                    profileWasSaved = profileWasSaved
+                )
                 return@launch
             }
 
+            // Закрываем редактирование только после успешного
+            // сохранения профиля и установки напоминания.
             savedChannel.send(Unit)
         }
     }
 
-    private fun canEdit(): Boolean {
-        val state = _uiState.value
+    private fun reportSaveError(
+        error: Exception,
+        profileWasSaved: Boolean
+    ) {
+        val explanation = when (error) {
+            is IllegalArgumentException,
+            is IllegalStateException -> {
+                error.message ?: "Попробуйте ещё раз."
+            }
 
-        return state.isLoaded &&
-                !state.isLoading &&
-                !state.isSaving &&
-                !state.isProcessingPhoto
+            else -> {
+                "Попробуйте ещё раз."
+            }
+        }
+
+        val message = when {
+            profileWasSaved -> {
+                "Профиль сохранён, но напоминание не установлено. " +
+                        explanation
+            }
+
+            error is IllegalArgumentException ||
+                    error is IllegalStateException -> {
+                explanation
+            }
+
+            else -> {
+                "Не удалось сохранить профиль. $explanation"
+            }
+        }
+
+        _uiState.update {
+            it.copy(
+                isSaving = false,
+                error = message
+            )
+        }
     }
 
     companion object {
@@ -340,7 +423,9 @@ class EditProfileViewModel(
         fun factory(
             observeProfile: ObserveProfileUseCase,
             saveProfile: SaveProfileUseCase,
-            photoRepository: ProfilePhotoRepository
+            photoRepository: ProfilePhotoRepository,
+            getClassReminderTime: GetClassReminderTimeUseCase,
+            reminderScheduler: ClassReminderScheduler
         ): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
 
@@ -357,7 +442,9 @@ class EditProfileViewModel(
                     return EditProfileViewModel(
                         observeProfile = observeProfile,
                         saveProfile = saveProfile,
-                        photoRepository = photoRepository
+                        photoRepository = photoRepository,
+                        getClassReminderTime = getClassReminderTime,
+                        reminderScheduler = reminderScheduler
                     ) as T
                 }
             }

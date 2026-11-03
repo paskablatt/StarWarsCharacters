@@ -28,7 +28,9 @@ class ProfileRepositoryImpl(
                     fullName = preferences[FULL_NAME].orEmpty(),
                     photoUri = preferences[PHOTO_URI].orEmpty(),
                     resumeUrl = preferences[RESUME_URL].orEmpty(),
-                    position = preferences[POSITION].orEmpty()
+                    position = preferences[POSITION].orEmpty(),
+                    favoriteClassTime =
+                        preferences[FAVORITE_CLASS_TIME].orEmpty()
                 )
             }
             .distinctUntilChanged()
@@ -39,6 +41,8 @@ class ProfileRepositoryImpl(
             preferences[PHOTO_URI] = profile.photoUri
             preferences[RESUME_URL] = profile.resumeUrl.trim()
             preferences[POSITION] = profile.position.trim()
+            preferences[FAVORITE_CLASS_TIME] =
+                profile.favoriteClassTime
         }
     }
 
@@ -47,5 +51,7 @@ class ProfileRepositoryImpl(
         val PHOTO_URI = stringPreferencesKey("photo_uri")
         val RESUME_URL = stringPreferencesKey("resume_url")
         val POSITION = stringPreferencesKey("position")
+        val FAVORITE_CLASS_TIME =
+            stringPreferencesKey("favorite_class_time")
     }
 }
