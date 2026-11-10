@@ -21,21 +21,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.starwarscharacters.R
-import com.example.starwarscharacters.di.AppContainer
+import com.example.starwarscharacters.feature.profile.R
 
 @Composable
 fun ProfileScreen(
+    profileViewModel: ProfileViewModel,
     onEditClick: () -> Unit
 ) {
-    val profileViewModel: ProfileViewModel = viewModel(
-        factory = ProfileViewModel.factory(
-            observeProfile = AppContainer.observeProfileUseCase,
-            downloadResume = AppContainer.downloadResumeUseCase
-        )
-    )
-
     val state by
     profileViewModel.uiState.collectAsStateWithLifecycle()
 

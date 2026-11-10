@@ -41,6 +41,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":feature:profile"))
     implementation(platform(libs.androidx.compose.bom))
 
     implementation(libs.androidx.activity.compose)
@@ -54,10 +55,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.constraintlayout.compose)
 
-    implementation(
-        "androidx.lifecycle:lifecycle-runtime-compose:2.11.0"
-    )
-    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)

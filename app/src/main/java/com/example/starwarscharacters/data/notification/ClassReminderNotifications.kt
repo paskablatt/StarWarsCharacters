@@ -13,7 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.starwarscharacters.MainActivity
-import com.example.starwarscharacters.R
+import com.example.starwarscharacters.feature.profile.R
 
 object ClassReminderNotifications {
 
