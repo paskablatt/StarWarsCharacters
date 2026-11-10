@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "StarWarsCharacters"
 include(":app")
- 
+include(":feature:profile")

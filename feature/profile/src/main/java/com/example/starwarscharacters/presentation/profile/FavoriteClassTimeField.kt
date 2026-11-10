@@ -22,8 +22,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import com.example.starwarscharacters.R
 import com.example.starwarscharacters.domain.validation.FavoriteClassTimeValidator
+import com.example.starwarscharacters.feature.profile.R
 import java.util.Calendar
 import java.util.Locale
 

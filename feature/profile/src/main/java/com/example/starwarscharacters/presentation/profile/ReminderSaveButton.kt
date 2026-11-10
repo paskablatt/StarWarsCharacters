@@ -22,15 +22,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.example.starwarscharacters.di.AppContainer
+import com.example.starwarscharacters.domain.reminder.ClassReminderScheduler
 
 @Composable
 fun ReminderSaveButton(
+    scheduler: ClassReminderScheduler,
     enabled: Boolean,
     onSave: () -> Unit
 ) {
     val context = LocalContext.current
-    val scheduler = AppContainer.classReminderScheduler
 
     val currentOnSave by rememberUpdatedState(onSave)
     val currentEnabled by rememberUpdatedState(enabled)

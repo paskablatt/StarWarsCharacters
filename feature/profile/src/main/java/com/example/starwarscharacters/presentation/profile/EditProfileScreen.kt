@@ -30,25 +30,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.starwarscharacters.di.AppContainer
+import com.example.starwarscharacters.domain.reminder.ClassReminderScheduler
 import kotlinx.coroutines.launch
 
 @Composable
 fun EditProfileScreen(
+    editViewModel: EditProfileViewModel,
+    scheduler: ClassReminderScheduler,
     onBackClick: () -> Unit
 ) {
-    val editViewModel: EditProfileViewModel = viewModel(
-        factory = EditProfileViewModel.factory(
-            observeProfile = AppContainer.observeProfileUseCase,
-            saveProfile = AppContainer.saveProfileUseCase,
-            photoRepository = AppContainer.profilePhotoRepository,
-            getClassReminderTime =
-                AppContainer.getClassReminderTimeUseCase,
-            reminderScheduler = AppContainer.classReminderScheduler
-        )
-    )
-
     val state by editViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -158,6 +148,7 @@ fun EditProfileScreen(
 
     EditProfileContent(
         state = state,
+        scheduler = scheduler,
         onBackClick = onBackClick,
         onFullNameChange = editViewModel::onFullNameChange,
         onPositionChange = editViewModel::onPositionChange,
@@ -201,6 +192,7 @@ fun EditProfileScreen(
 @Composable
 private fun EditProfileContent(
     state: EditProfileUiState,
+    scheduler: ClassReminderScheduler,
     onBackClick: () -> Unit,
     onFullNameChange: (String) -> Unit,
     onPositionChange: (String) -> Unit,
@@ -302,6 +294,7 @@ private fun EditProfileContent(
                 },
                 actions = {
                     ReminderSaveButton(
+                        scheduler = scheduler,
                         enabled = state.canSave,
                         onSave = onSaveClick
                     )

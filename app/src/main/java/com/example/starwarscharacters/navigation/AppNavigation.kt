@@ -13,9 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import com.example.starwarscharacters.R
+import com.example.starwarscharacters.di.AppContainer
 import com.example.starwarscharacters.domain.StarWarsCharacter
 import com.example.starwarscharacters.presentation.CharacterDetailsScreen
 import com.example.starwarscharacters.presentation.CharactersListScreen
@@ -23,7 +25,9 @@ import com.example.starwarscharacters.presentation.FavoritesScreen
 import com.example.starwarscharacters.presentation.PlaceholderScreen
 import com.example.starwarscharacters.presentation.films.FilmsScreen
 import com.example.starwarscharacters.presentation.profile.EditProfileScreen
+import com.example.starwarscharacters.presentation.profile.EditProfileViewModel
 import com.example.starwarscharacters.presentation.profile.ProfileScreen
+import com.example.starwarscharacters.presentation.profile.ProfileViewModel
 import com.example.starwarscharacters.presentation.settings.SearchSettingsScreen
 
 private const val CHARACTERS_TAB = "characters_tab"
@@ -174,7 +178,14 @@ private fun ProfileNavigation() {
         startDestination = "profile"
     ) {
         composable("profile") {
+            val profileViewModel: ProfileViewModel = viewModel(
+                factory = ProfileViewModel.factory(
+                    observeProfile = AppContainer.observeProfileUseCase,
+                    downloadResume = AppContainer.downloadResumeUseCase
+                )
+            )
             ProfileScreen(
+                profileViewModel = profileViewModel,
                 onEditClick = {
                     navController.navigate("edit_profile") {
                         launchSingleTop = true
@@ -184,7 +195,19 @@ private fun ProfileNavigation() {
         }
 
         composable("edit_profile") {
+            val scheduler = AppContainer.classReminderScheduler
+            val editViewModel: EditProfileViewModel = viewModel(
+                factory = EditProfileViewModel.factory(
+                    observeProfile = AppContainer.observeProfileUseCase,
+                    saveProfile = AppContainer.saveProfileUseCase,
+                    photoRepository = AppContainer.profilePhotoRepository,
+                    getClassReminderTime = AppContainer.getClassReminderTimeUseCase,
+                    reminderScheduler = scheduler
+                )
+            )
             EditProfileScreen(
+                editViewModel = editViewModel,
+                scheduler = scheduler,
                 onBackClick = {
                     navController.popBackStack()
                 }
