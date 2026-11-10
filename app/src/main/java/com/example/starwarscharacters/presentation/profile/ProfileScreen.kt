@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.starwarscharacters.R
 import com.example.starwarscharacters.di.AppContainer
 
 @Composable
@@ -185,13 +187,17 @@ private fun ProfileContent(
                     if (profile.fullName.isBlank()) {
                         Text(
                             text = "Нажмите «Редактировать», " +
-                                    "чтобы добавить фотографию, ФИО " +
-                                    "и ссылку на резюме.",
+                                    "чтобы заполнить профиль " +
+                                    "и указать время любимой пары.",
                             textAlign = TextAlign.Center,
                             color =
                                 MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    FavoriteClassTimeCard(
+                        time = profile.favoriteClassTime
+                    )
 
                     Button(
                         onClick = onResumeClick,
@@ -237,6 +243,52 @@ private fun ProfileContent(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteClassTimeCard(
+    time: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_clock),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Время любимой пары",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Text(
+                    text = time.ifBlank {
+                        "Не указано"
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = if (time.isBlank()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
             }
         }
     }
